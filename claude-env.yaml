@@ -1,0 +1,66 @@
+# Podman kube file — Claude Code container.
+#
+# One-time setup:
+#   mkdir -p claude/.claude
+#   cp ~/.claude/.credentials.json claude/.claude/.credentials.json
+#
+# Run (interactive):
+#   podman kube play claude-env.yaml
+#   podman exec -it -e TERM=$TERM claude-env-claude-code claude
+#
+# Tear down:
+#   podman kube down claude-env.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: claude-env
+spec:
+  restartPolicy: Never
+
+  containers:
+    - name: claude-code
+      image: localhost/claude-env:latest
+      stdin: true
+      tty: true
+
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+
+      volumeMounts:
+        - name: home
+          mountPath: /home/claude
+        - name: work
+          mountPath: /work
+        - name: nix-store
+          mountPath: /nix/store
+          readOnly: true
+        - name: nix-profiles
+          mountPath: /nix/var/nix/profiles
+          readOnly: true
+  volumes:
+    # ./claude on the host is the container's home directory.
+    # Claude Code state (credentials, settings, history) lives in ./claude/.claude/.
+    - name: home
+      hostPath:
+        path: ./claude
+        type: Directory
+    # ./work on the host is the development project directory inside the container.
+    # play.sh substitutes this path at pod-start time — no symlinks needed.
+    - name: work
+      hostPath:
+        path: ./work
+        type: Directory
+    # Host Nix store (read-only). The container can read any derivation already in
+    # the host store but cannot build, delete, or GC — no daemon socket is mounted.
+    # Dev shell environments are injected via ~/dev-env.sh (see gen-dev-env.sh).
+    - name: nix-store
+      hostPath:
+        path: /nix/store
+        type: Directory
+    - name: nix-profiles
+      hostPath:
+        path: /nix/var/nix/profiles
+        type: Directory
