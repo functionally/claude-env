@@ -10,5 +10,5 @@ set -euo pipefail
 
 POD_NAME="${1:-claude-env}"
 
-podman exec -it -e TERM="$TERM" "${POD_NAME}-claude-code" \
+podman exec -it -e TERM="$TERM" "${POD_NAME}-claude" \
   bash -c 'source /work/dev-env.sh && cd /work && exec bash -i'

@@ -19,7 +19,7 @@ spec:
   restartPolicy: Never
 
   containers:
-    - name: claude-code
+    - name: claude
       image: localhost/claude-env:latest
       stdin: true
       tty: true
