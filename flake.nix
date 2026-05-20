@@ -29,6 +29,8 @@
             findutils gnugrep gnused gawk diffutils patch less which procps file
             # Network and data
             curl jq ripgrep
+            # Scripting
+            python3
             # Diagnostics
             strace
           ];
