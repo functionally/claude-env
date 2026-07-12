@@ -30,9 +30,12 @@
             # Network and data
             curl jq ripgrep
             # Scripting
+            gnumake
             python3
             # Diagnostics
             strace
+            # UI
+            neovim
           ];
         };
 
