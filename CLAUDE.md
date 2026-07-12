@@ -31,25 +31,32 @@ mkdir -p claude/.claude
 cp ~/.claude/.credentials.json claude/.claude/.credentials.json
 ```
 
-Before starting, generate the dev environment script for the project on the host:
+Before starting, generate the dev environment script on the host. `gen-dev-env.sh` takes **two** arguments — the flake and the project directory — so the flake providing the dev shell need not live inside the project (one shared flake can serve many projects):
 
 ```bash
-./gen-dev-env.sh examples/rust      # writes examples/rust/dev-env.sh
-./gen-dev-env.sh /path/to/project   # or any flake; no leading ./ required
+# gen-dev-env.sh FLAKE_PATH PROJECT_DIR
+./gen-dev-env.sh examples/rust examples/rust           # flake and project coincide
+./gen-dev-env.sh /path/to/shared-flake /path/to/proj   # one shared flake, any project
 ```
+
+`dev-env.sh` is written into `PROJECT_DIR`, so it appears in the container at `/work/POD_NAME/dev-env.sh`.
 
 Start a pod (pod name defaults to the last path component of the work directory):
 
 ```bash
-./play.sh examples/rust             # pod named "rust", /work = examples/rust
-./play.sh /path/to/project mypod    # explicit pod name
+./play.sh examples/rust             # pod named "rust", mounted at /work/rust
+./play.sh /path/to/project mypod    # explicit pod name, mounted at /work/mypod
 ```
 
-Enter the container — sources `/work/dev-env.sh`, cds to `/work`, drops to an interactive shell:
+The project is mounted at `/work/POD_NAME` (not bare `/work`), giving each project a distinct in-container path and therefore a distinct Claude Code session slug.
+
+Enter the container — sources `/work/POD_NAME/dev-env.sh`, cds to `/work/POD_NAME`, drops to an interactive shell:
 
 ```bash
 ./exec.sh rust     # pod name matches what was passed to play.sh
 ```
+
+Launch `claude` from `/work/POD_NAME` (where `exec.sh` leaves you), not a subdirectory: Claude Code keys session history to the launch directory, so `cd`-ing deeper before running `claude` forks the session bucket and breaks `claude --resume`.
 
 Tear down:
 
@@ -57,7 +64,7 @@ Tear down:
 podman pod stop rust && podman pod rm rust
 ```
 
-Multiple pods with different projects can run simultaneously; each has its own name, `/work` mount, and `dev-env.sh`.
+Multiple pods with different projects can run simultaneously; each has its own name, its own `/work/POD_NAME` mount, and its own `dev-env.sh`. Project files are isolated by the mount; session history is shared in the one home but scoped per project on resume (see Architecture).
 
 ## Architecture
 
@@ -72,13 +79,20 @@ Multiple pods with different projects can run simultaneously; each has its own n
 | Container path | Source | Purpose |
 |---|---|---|
 | `/home/claude` | `./claude/` | Claude Code state (credentials, settings, history) |
-| `/work` | host path passed to `play.sh` | Development project; also contains `dev-env.sh` |
+| `/work/POD_NAME` | host path passed to `play.sh` | Development project; also contains `dev-env.sh` |
 | `/nix/store` | `/nix/store` (host, read-only) | Pre-built derivations referenced by `dev-env.sh` |
 | `/nix/var/nix/profiles` | host, read-only | Nix profile binaries |
 
 No daemon socket is mounted. The container can read the host store but cannot build, delete, or GC. The entire `claude/` directory is `.gitignore`d.
 
 **Credentials:** OAuth credentials live in `claude/.claude/.credentials.json` (copied from `~/.claude/.credentials.json` on first setup).
+
+**Session model (shared store, per-project scope):** `CLAUDE_CONFIG_DIR` is left at its default, so Claude Code's config root is the shared home at `/home/claude/.claude`. Account state (credentials, global settings such as the status line) and all session history therefore live in one place, shared across every pod started from this clone. Isolation between projects comes from two independent mechanisms:
+
+- **Project files** are isolated by the mount — a pod sees only its own `/work/POD_NAME`, never another project's directory.
+- **Sessions** are isolated by the path slug. Because each project is mounted at a distinct `/work/POD_NAME` and `claude` is launched from there, Claude Code files each project's transcripts under a distinct slug in `/home/claude/.claude/projects/`. `claude --resume` from `/work/POD_NAME` lists only that project's sessions, yet all transcripts remain in the single shared home for browsing or backup.
+
+This is why the mount path is `/work/POD_NAME` rather than bare `/work`: mounting every project at the same path would collapse them into one slug and let `--resume` mix sessions across projects. To keep work and personal accounts separate, clone this repository twice and seed each clone's `claude/.claude/` with the matching credentials.
 
 **Sandbox:** `enableWeakerNestedSandbox: true` is set in `claude/.claude/settings.json` because bubblewrap's nested user-namespace setup hangs inside a rootless Podman container.
 
@@ -90,8 +104,8 @@ The container mounts the host Nix store and profiles read-only. No daemon socket
 
 `nix print-dev-env` (Nix ≥ 2.4) evaluates a flake's `devShell` on the host and writes a shell script (`dev-env.sh`) that sets `PATH`, `CC`, `PKG_CONFIG_PATH`, etc. to the relevant `/nix/store/...` paths. Since the store is read-only mounted, those paths are accessible without a daemon socket.
 
-- `gen-dev-env.sh` runs `nix print-dev-env` and writes `dev-env.sh` into the project directory.
-- `exec.sh` sources `dev-env.sh` inside the container via `bash -c 'source /work/dev-env.sh && cd /work && exec bash -i'`.
+- `gen-dev-env.sh` runs `nix print-dev-env` and writes `dev-env.sh` into the project directory (its second argument), independent of where the flake lives.
+- `exec.sh` sources `dev-env.sh` inside the container via `bash -c "source /work/POD_NAME/dev-env.sh && cd /work/POD_NAME && exec bash -i"`.
 - Re-run `gen-dev-env.sh` whenever the flake's inputs change.
 - Only works for packages already in the host store; run `nix develop` on the host first if the flake has new deps.
 

@@ -1,21 +1,30 @@
 #!/usr/bin/env bash
-# Generate dev-env.sh inside the project directory for use inside the container.
+# Generate dev-env.sh for a project, from a flake that may live ELSEWHERE.
 #
-# Usage: ./gen-dev-env.sh [FLAKE_PATH]
+# Usage: ./gen-dev-env.sh FLAKE_PATH PROJECT_DIR
 #
-# FLAKE_PATH is the path to a flake on the host whose devShell you want
-# available inside the container. Defaults to ./work. The path is resolved
-# to an absolute path before being passed to nix, so a leading ./ is not required.
+# FLAKE_PATH:  host path to a flake whose devShell you want in the container.
+#              May be a shared parent flake used by many projects.
+# PROJECT_DIR: the project directory that play.sh mounts as /work/POD_NAME.
+#              dev-env.sh is written here so it appears at /work/POD_NAME/dev-env.sh.
 #
-# Run this from anywhere whenever the flake's inputs change, then
-# source /work/dev-env.sh inside the container to activate the environment.
-
+# Decoupling the flake from the project lets many projects share one flake:
+#   ./gen-dev-env.sh /path/to/shared-flake /path/to/projectA
+#   ./gen-dev-env.sh /path/to/shared-flake /path/to/projectB
+#
+# Re-run whenever the flake's inputs change.
+ 
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FLAKE="$(realpath "${1:-"$SCRIPT_DIR/work"}")"
-OUTPUT="$FLAKE/dev-env.sh"
-
-echo "Generating dev env from $FLAKE ..." >&2
+ 
+if [[ $# -lt 2 ]]; then
+  echo "Usage: $0 FLAKE_PATH PROJECT_DIR" >&2
+  exit 1
+fi
+ 
+FLAKE="$(realpath "$1")"
+PROJECT_DIR="$(realpath "$2")"
+OUTPUT="$PROJECT_DIR/dev-env.sh"
+ 
+echo "Generating dev env from $FLAKE into $OUTPUT ..." >&2
 nix print-dev-env "$FLAKE" > "$OUTPUT"
-echo "Done. Inside the container, run: source /work/dev-env.sh" >&2
+echo "Done. Inside the container: source /work/<pod>/dev-env.sh (exec.sh does this)." >&2
