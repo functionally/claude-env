@@ -4,8 +4,5 @@
     "type": "command",
     "command": "bash /home/claude/.claude/statusline-command.sh"
   },
-  "model": "opus",
-  "enabledPlugins": {
-    "rust-analyzer-lsp@claude-plugins-official": true
-  }
+  "model": "opus"
 }
