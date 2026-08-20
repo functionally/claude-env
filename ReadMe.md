@@ -124,3 +124,7 @@ the flake that produced them does not need to be visible inside the container at
 all — only the store does.
 
 See `CLAUDE.md` for architecture details and alternative approaches.
+
+## Telling the agent about the container
+
+Agents inside the container cannot see how it was constructed, and constraints documented only in this repository do not reach them: a pointer transfers access, not knowledge. `LIMITS.md` is the canonical, agent-addressed statement of the container's hard limits (read-only store, snapshot environment, PATH contract, refresh cycle). **Copy or link it into each project's `AGENTS.md`** so agents learn the limits at the point of use instead of by probing. Keep `LIMITS.md` in the same commit as any change to `claude-env.yaml`, `gen-dev-env.sh`, or `exec.sh` that alters the limits.
