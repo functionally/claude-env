@@ -23,6 +23,8 @@
           paths = with pkgs; [
             # Claude Code and shell
             claude-code bashInteractive coreutils cacert
+            # Codex
+            codex
             # VCS
             git gh
             # Shell utilities not in coreutils
