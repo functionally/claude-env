@@ -17,18 +17,18 @@ metadata:
   name: claude-env
 spec:
   restartPolicy: Never
-
   containers:
     - name: claude
       image: localhost/claude-env:latest
       stdin: true
       tty: true
-
+      resources:
+        limits:
+          memory: "80Gi"
       securityContext:
         allowPrivilegeEscalation: false
         capabilities:
           drop: ["ALL"]
-
       volumeMounts:
         - name: home
           mountPath: /home/claude
